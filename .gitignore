@@ -1,0 +1,17 @@
+node_modules
+.idea
+
+#Hardhat files
+cache
+artifacts
+
+.env
+
+usingusdc.sol
+test.sol
+sss.sol
+ddd.soldsdd.txt
+maintest.txt
+ddd.txt
+dsdd.txt
+maintest.txt

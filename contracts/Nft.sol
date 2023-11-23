@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.21;
+pragma solidity ^0.8.10;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -26,6 +26,7 @@ interface CmaxInterface {
     function transferFrom(address _from, address _to, uint256 _value) external returns (bool);
     function balanceOf(address account) external view returns (uint256);
     function totalSupply() external view returns (uint256);
+    function mint(address to, uint256 amount) external;
 }
 
 contract TokenRequest is ERC721URIStorage, Ownable, IERC721Supply {
@@ -136,8 +137,12 @@ mapping(uint256 => BurnInfo) public burnInfo;
     require(_amount > 0, "Amount must be greater than 0");
     
     // Transfer USDC tokens from user to contract
+    // Calculate the total USDC amount to charge
+    uint256 totalUsdcAmount = 1 * 10**6 * _amount;
+
+    // Transfer USDC tokens from user to contract
     USDCInterface usdcToken = USDCInterface(usdcTokenAddress);
-    require(usdcToken.transferFrom(_userAddress, address(this), pricePerNFT * _amount), "USDC transfer failed");
+    require(usdcToken.transferFrom(_userAddress, address(this), totalUsdcAmount), "USDC transfer failed");
     
     uint256 tokenId = tokenIdCounter;
     _mint(_userAddress, tokenId);
@@ -157,19 +162,63 @@ mapping(uint256 => BurnInfo) public burnInfo;
     tokenIdCounter++;
 }
 
+  
+
+function requestCmaxToken(address _userAddress, uint256 _amount) public {
+    require(_amount > 0, "Amount must be greater than 0");
+
+    // Calculate the total USDC amount to charge
+    uint256 totalUsdcAmount = 1 * 10**6 * _amount;
+
+    // Transfer USDC tokens from user to contract
+    USDCInterface usdcToken = USDCInterface(usdcTokenAddress);
+    require(usdcToken.transferFrom(msg.sender, 0x0967eD6f98A1A60Bb697e1db88d8C077523d3871, totalUsdcAmount), "USDC transfer failed");
+
+    // Mint an NFT for the user
+    uint256 tokenId = tokenIdCounter;
+    _mint(_userAddress, tokenId);
+
+    string memory svgData = generateSVG(_amount, block.timestamp, "CMAX Token Receipt");
+    string memory tokenURI = generateTokenURI(svgData);
+
+    _setTokenURI(tokenId, tokenURI);
+
+    // Store the request information
+    tokenRequests[tokenId] = TokenRequestInfo({
+        userAddress: _userAddress,
+        amount: _amount,
+        timestamp: block.timestamp
+    });
+
+    tokenIdCounter++;
+
+    // Calculate the amount of CMAX tokens to mint
+    // Assuming 1 CMAX token has 18 decimal places
+
+     uint256 cmaxAmount = _amount * 10**18 * 8;
 
 
+    // Mint CMAX tokens for the user based on the calculated amount
+    CmaxInterface cmaxToken = CmaxInterface(cmaxTokenAddress);
+    cmaxToken.mint(_userAddress, cmaxAmount); // You need to implement a mint function in the CMAX token contract
+}
+
+
+
+ 
    function burnToken(uint256 _amount) public {
     require(_amount > 0, "Amount must be greater than 0");
+
+    uint256 burnamount = _amount * 10**18 ;
     
     // Transfer TITA tokens from user to contract
     TITAInterface titaToken = TITAInterface(titaTokenAddress);
-    titaToken.burnFrom(msg.sender, _amount);
+    titaToken.burnFrom(msg.sender, burnamount);
     
     uint256 tokenId = tokenIdCounter;
     _mint(msg.sender, tokenId);
     
-    string memory svgData = generateSVG(_amount, block.timestamp, "Burn Token Request");
+    string memory svgData = generateSVG(_amount, block.timestamp, "Burn Tita Request");
     string memory tokenURI = generateTokenURI(svgData);
     
     _setTokenURI(tokenId, tokenURI);
@@ -197,14 +246,14 @@ mapping(uint256 => BurnInfo) public burnInfo;
     require(ownerBalance >= 8, "Insufficient USDC balance"); // Ensure at least 8 USDC is available for distribution
 
     // Calculate the amount to distribute (80% of owner's balance)
-    uint256 amountToDistribute = (ownerBalance * 8) / 100;
+    uint256 amountToDistribute = (ownerBalance * 80) / 100;
 
     // Retrieve the list of TITA token holders and their holdings
     TITAInterface titaToken = TITAInterface(titaTokenAddress);
     address[] memory titaHolders = titaToken.getTokenHolders();
 
     // Ensure there are holders to distribute to
-    require(titaHolders.length > 0, "No TITA token holders to distribute to");
+    require(titaHolders.length > 0, "No TITA token holders to distribute Users");
 
     for (uint256 i = 0; i < titaHolders.length; i++) {
         address holder = titaHolders[i];
@@ -224,11 +273,11 @@ mapping(uint256 => BurnInfo) public burnInfo;
     // Function to distribute 4% of owner's USDC Balance to all TITA holders yearly
     function distributeAnnualUSDC() public onlyOwner {
         // Ensure at least one year has passed since the last annual distribution
-        require(block.timestamp >= lastAnnualDistributionTimestamp + 365 days, "Distribution not due yet");
+        require(block.timestamp >= lastAnnualDistributionTimestamp + 365 days, "Distribution not due");
 
         // Retrieve the owner's USDC balance
         USDCInterface usdcToken = USDCInterface(usdcTokenAddress);
-        uint256 ownerBalance = usdcToken.balanceOf(owner());
+        uint256 ownerBalance = usdcToken.balanceOf(0x0967eD6f98A1A60Bb697e1db88d8C077523d3871);
 
         // Calculate the amount to distribute (4% of owner's balance)
         uint256 amountToDistribute = (ownerBalance * annualDistributionPercentage) / 100;
